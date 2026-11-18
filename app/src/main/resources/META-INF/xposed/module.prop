@@ -1,0 +1,8 @@
+name=欧泡小窗优化
+version=3.28.7-1820
+versionCode=1820
+author=喛雪
+description=ColorOS 小窗增强：双击小白条关闭/全屏、长按小窗一键静音、贴边/息屏保活、侧边栏与通知气泡
+minApiVersion=101
+targetApiVersion=102
+staticScope=false

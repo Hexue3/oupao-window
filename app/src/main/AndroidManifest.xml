@@ -1,0 +1,140 @@
+<?xml version="1.0" encoding="utf-8"?>
+<manifest xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:tools="http://schemas.android.com/tools">
+
+    <!-- Blur itself targets API 33; MiuixShell uses a non-blurred fallback below it. -->
+    <uses-sdk tools:overrideLibrary="top.yukonga.miuix.kmp.blur" />
+    <!-- 写系统设置（原模块已有） -->
+    <uses-permission android:name="android.permission.WRITE_SETTINGS" />
+    <!-- 侧边栏/小窗操作的触感反馈（Fly.vib / Sug 用到 Vibrator） -->
+    <uses-permission android:name="android.permission.VIBRATE" />
+    <!-- 侧边栏手电筒建议（Sug$Torch 用到 CameraManager.setTorchMode） -->
+    <uses-permission android:name="android.permission.FLASHLIGHT" />
+    <uses-permission android:name="android.permission.CAMERA" />
+    <!-- 侧边栏应用列表 / 剪贴板识别包名（Sug$Pins 用到 PackageManager + 读 /data/system/packages.list） -->
+    <uses-permission android:name="android.permission.QUERY_ALL_PACKAGES" />
+    <!-- 自测通知（TestNotif）：发一条高优先级通知验证横幅屏蔽 -->
+    <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />
+
+    <application
+        android:allowBackup="false"
+        android:enableOnBackInvokedCallback="true"
+        android:icon="@mipmap/ic_launcher"
+        android:label="@string/app_name"
+        android:roundIcon="@mipmap/ic_launcher">
+
+        <!-- 保活唤醒：模块自身进程接收 com.oupao.wiz.WARM -->
+        <receiver
+            android:name=".WarmK"
+            android:exported="true">
+            <intent-filter>
+                <action android:name="com.oupao.wiz.WARM" />
+                <action android:name="com.oupao.wiz.SOFT_REBOOT" />
+            </intent-filter>
+        </receiver>
+
+        <!-- 3146：别的进程（SystemUI / ColorOS 设置页）改开关的落点。
+             hook 进程里的远程 prefs 只读，必须由 App 通过框架 service 写。 -->
+        <receiver
+            android:name=".CfgSet"
+            android:exported="true">
+            <intent-filter>
+                <action android:name="com.oupao.wiz.SET" />
+            </intent-filter>
+        </receiver>
+
+        <!-- 自测用：发一条高优先级通知，验证「屏蔽悬浮通知」是否生效。
+             adb shell am broadcast -a com.oupao.wiz.TEST_NOTIF -n com.oupao.wiz/.TestNotif
+             adb shell am broadcast -a com.oupao.wiz.TEST_NOTIF_CANCEL -n com.oupao.wiz/.TestNotif -->
+        <receiver
+            android:name=".TestNotif"
+            android:exported="true">
+            <intent-filter>
+                <action android:name="com.oupao.wiz.TEST_NOTIF" />
+                <action android:name="com.oupao.wiz.TEST_NOTIF_CANCEL" />
+                <action android:name="com.oupao.wiz.RESET_LISTS" />
+                <action android:name="com.oupao.wiz.FLY_ON" />
+                <action android:name="com.oupao.wiz.FLY_OFF" />
+                <action android:name="com.oupao.wiz.PURGE_LEGACY" />
+            </intent-filter>
+        </receiver>
+
+        <!-- 自测：以模块自身身份（真实 App uid + 非空 Bundle）发起跨应用跳转，见 XzTest。
+             用法见 XzTest 类注释（am broadcast 传 url extra）。 -->
+        <receiver
+            android:name=".XzTest"
+            android:exported="true">
+            <intent-filter>
+                <action android:name="com.oupao.wiz.XZTEST" />
+            </intent-filter>
+        </receiver>
+
+        <!-- 自测：以 startActivityForResult 打开链接（复现微信/QQ「用浏览器打开」的带 resultTo 路径） -->
+        <activity
+            android:name=".XzAct"
+            android:exported="true" />
+
+        <!-- 兼容老版本 LSPosed 管理器识别（新版本读 META-INF/xposed/） -->
+        <meta-data
+            android:name="xposedmodule"
+            android:value="true" />
+        <meta-data
+            android:name="xposeddescription"
+            android:value="@string/xposed_description" />
+        <meta-data
+            android:name="xposedminversion"
+            android:value="93" />
+
+        <!-- 组件结构沿用同机上另一应用的做法：
+               MainActivity                → MAIN (无桌面图标)
+               LauncherAlias               → MAIN + LAUNCHER            ← 桌面图标（可禁用）
+               ModuleSettingsAlias         → MAIN + MODULE_SETTINGS     ← LSPosed 的「打开」入口
+             LSPosed 的「打开」按钮走的是 `de.robv.android.xposed.category.MODULE_SETTINGS`
+             这个 category，**不是** launcher 组件。所以禁用 LauncherAlias 后：
+             桌面图标消失，LSPosed 里依然有「打开」，而且**不需要桌面作用域**。 -->
+        <activity
+            android:name=".MainActivity"
+            android:exported="true"
+            android:label="@string/app_name"
+            android:launchMode="singleTask"
+            android:resizeableActivity="true"
+            android:windowSoftInputMode="adjustResize" />
+
+        <!-- 桌面图标入口：隐藏桌面图标时禁用这一个组件即可 -->
+        <activity-alias
+            android:name=".LauncherAlias"
+            android:exported="true"
+            android:icon="@mipmap/ic_launcher"
+            android:roundIcon="@mipmap/ic_launcher"
+            android:label="@string/app_name"
+            android:targetActivity=".MainActivity">
+            <intent-filter>
+                <action android:name="android.intent.action.MAIN" />
+                <category android:name="android.intent.category.LAUNCHER" />
+            </intent-filter>
+        </activity-alias>
+
+        <!-- LSPosed 的模块「打开/设置」入口，永远保持启用 -->
+        <activity-alias
+            android:name=".ModuleSettingsAlias"
+            android:exported="true"
+            android:label="@string/app_name"
+            android:targetActivity=".MainActivity">
+            <intent-filter>
+                <action android:name="android.intent.action.MAIN" />
+                <category android:name="de.robv.android.xposed.category.MODULE_SETTINGS" />
+            </intent-filter>
+        </activity-alias>
+
+        <!-- 3282：日志导出后用 FileProvider 分享 zip（不需要任何存储权限） -->
+        <provider
+            android:name="androidx.core.content.FileProvider"
+            android:authorities="${applicationId}.fileprovider"
+            android:exported="false"
+            android:grantUriPermissions="true">
+            <meta-data
+                android:name="android.support.FILE_PROVIDER_PATHS"
+                android:resource="@xml/file_paths" />
+        </provider>
+    </application>
+</manifest>
